@@ -1,0 +1,1233 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RGB Sprint Planner</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Rubik:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+  --bg: #F8F8F6;
+  --surface: #FFFFFF;
+  --surface-hover: #F3F3F0;
+  --border: #E5E5E0;
+  --border-light: #EEEEEA;
+  --text: #1A1A1A;
+  --text-secondary: #6B6B6B;
+  --text-muted: #9B9B9B;
+  --indigo: #6366F1;
+  --indigo-light: #EEF2FF;
+  --indigo-border: #C7D2FE;
+  --green: #22C55E;
+  --green-light: #F0FDF4;
+  --green-border: #BBF7D0;
+  --amber: #F59E0B;
+  --amber-light: #FFFBEB;
+  --amber-border: #FDE68A;
+  --red: #EF4444;
+  --red-light: #FEF2F2;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.06);
+  --shadow-lg: 0 8px 24px rgba(0,0,0,0.08);
+  --radius: 10px;
+  --radius-sm: 6px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: 'Rubik', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* ── Header ── */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 24px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  height: 56px;
+}
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.logo {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--indigo);
+  letter-spacing: -0.5px;
+}
+.logo span { color: var(--text-muted); font-weight: 400; font-size: 14px; margin-right: 8px; }
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.cycle-info {
+  font-size: 13px;
+  color: var(--text-secondary);
+  background: var(--surface-hover);
+  padding: 4px 12px;
+  border-radius: 20px;
+}
+
+/* ── Layout ── */
+.layout {
+  display: flex;
+  height: calc(100vh - 56px);
+}
+
+/* ── Weekly Panel (LEFT) ── */
+.weekly-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.weekly-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+.weekly-title {
+  font-size: 15px;
+  font-weight: 600;
+}
+.week-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.week-nav button {
+  background: var(--surface-hover);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  width: 30px;
+  height: 30px;
+  cursor: pointer;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+.week-nav button:hover { background: var(--indigo-light); border-color: var(--indigo-border); }
+.week-label {
+  font-size: 13px;
+  font-weight: 500;
+  min-width: 100px;
+  text-align: center;
+  color: var(--text-secondary);
+}
+.weekly-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.person-section {
+  background: var(--surface);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+.person-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  background: var(--surface-hover);
+  border-bottom: 1px solid var(--border-light);
+}
+.person-name {
+  font-size: 14px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.person-avatar {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: white;
+}
+.person-stats {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.person-tasks {
+  min-height: 48px;
+  padding: 4px;
+}
+.person-tasks.drag-over {
+  background: var(--indigo-light);
+}
+.weekly-task {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  transition: background 0.15s;
+  cursor: grab;
+}
+.weekly-task:hover { background: var(--surface-hover); }
+.weekly-task.dragging { opacity: 0.4; }
+
+.status-btn {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  background: white;
+}
+.status-btn.in-progress {
+  border-color: var(--amber);
+  background: var(--amber-light);
+}
+.status-btn.done {
+  border-color: var(--green);
+  background: var(--green);
+  color: white;
+}
+.weekly-task-name {
+  flex: 1;
+  font-size: 13px;
+  min-width: 0;
+}
+.weekly-task-name.done-text {
+  text-decoration: line-through;
+  color: var(--text-muted);
+}
+.weekly-task-cat {
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+.task-note-icon {
+  font-size: 12px;
+  color: var(--text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.task-note-icon:hover { color: var(--indigo); }
+.remove-weekly {
+  font-size: 14px;
+  color: var(--text-muted);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s;
+  flex-shrink: 0;
+}
+.weekly-task:hover .remove-weekly { opacity: 1; }
+.remove-weekly:hover { color: var(--red); }
+
+.empty-person {
+  padding: 16px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 12px;
+  border: 2px dashed var(--border-light);
+  border-radius: var(--radius-sm);
+  margin: 4px;
+}
+
+/* ── Weekly Footer Progress ── */
+.weekly-footer {
+  padding: 12px 20px 16px;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.progress-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.progress-person {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 70px;
+}
+.progress-name {
+  font-size: 12px;
+  font-weight: 500;
+}
+.progress-track {
+  flex: 1;
+  height: 8px;
+  background: var(--surface-hover);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.progress-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+.progress-pct {
+  font-size: 12px;
+  font-weight: 600;
+  min-width: 36px;
+  text-align: left;
+  color: var(--text-secondary);
+}
+
+/* ── Resize Divider ── */
+.resize-handle {
+  width: 6px;
+  cursor: col-resize;
+  background: transparent;
+  position: relative;
+  flex-shrink: 0;
+  z-index: 10;
+  transition: background 0.15s;
+}
+.resize-handle:hover, .resize-handle.active {
+  background: var(--indigo);
+  opacity: 0.3;
+}
+.resize-handle::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 2px;
+  height: 32px;
+  border-radius: 2px;
+  background: var(--text-muted);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.resize-handle:hover::after, .resize-handle.active::after { opacity: 0.6; }
+
+/* ── Monthly Panel (RIGHT) ── */
+.monthly-panel {
+  min-width: 380px;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.monthly-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+}
+.monthly-title {
+  font-size: 15px;
+  font-weight: 600;
+}
+.add-task-btn {
+  background: var(--indigo);
+  color: white;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.15s;
+}
+.add-task-btn:hover { background: #5558E6; }
+.monthly-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+}
+.category-group {
+  margin-bottom: 8px;
+}
+.category-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: background 0.15s;
+  user-select: none;
+}
+.category-header:hover { background: var(--surface-hover); }
+.category-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+}
+.category-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.category-count {
+  font-size: 11px;
+  color: var(--text-muted);
+  background: var(--surface-hover);
+  padding: 1px 8px;
+  border-radius: 10px;
+}
+.category-chevron {
+  font-size: 10px;
+  color: var(--text-muted);
+  transition: transform 0.2s;
+}
+.category-chevron.collapsed { transform: rotate(-90deg); }
+.category-tasks {
+  padding: 2px 0 2px 16px;
+}
+.monthly-task {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: var(--radius-sm);
+  cursor: grab;
+  transition: all 0.15s;
+  position: relative;
+}
+.monthly-task:hover { background: var(--surface-hover); }
+.monthly-task.dragging { opacity: 0.4; }
+.monthly-task.pulled {
+  text-decoration: line-through;
+  color: var(--text-muted);
+}
+.monthly-task-name {
+  flex: 1;
+  font-size: 13px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pulled-tag {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: var(--indigo-light);
+  color: var(--indigo);
+  font-weight: 500;
+  flex-shrink: 0;
+}
+.push-btn {
+  font-size: 14px;
+  color: var(--text-muted);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s;
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  padding: 2px;
+}
+.monthly-task:hover .push-btn { opacity: 1; }
+.push-btn:hover { color: var(--indigo); }
+.edit-btn {
+  font-size: 12px;
+  color: var(--text-muted);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s;
+  flex-shrink: 0;
+}
+.monthly-task:hover .edit-btn { opacity: 1; }
+.edit-btn:hover { color: var(--indigo); }
+.delete-btn {
+  font-size: 13px;
+  color: var(--text-muted);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s;
+  flex-shrink: 0;
+}
+.monthly-task:hover .delete-btn { opacity: 1; }
+.delete-btn:hover { color: var(--red); }
+
+.priority-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.priority-dot.p0 { background: var(--red); }
+.priority-dot.p1 { background: var(--amber); }
+.priority-dot.p2 { background: var(--text-muted); }
+
+/* ── Modal ── */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  backdrop-filter: blur(2px);
+}
+.modal {
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 24px;
+  width: 420px;
+  max-width: 90vw;
+  box-shadow: var(--shadow-lg);
+}
+.modal h3 {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 16px;
+}
+.modal label {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+  margin-top: 12px;
+}
+.modal input, .modal select, .modal textarea {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  font-size: 13px;
+  background: var(--bg);
+  outline: none;
+  transition: border 0.15s;
+}
+.modal input:focus, .modal select:focus, .modal textarea:focus {
+  border-color: var(--indigo);
+}
+.modal textarea { resize: vertical; min-height: 60px; }
+.modal-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-start;
+  margin-top: 20px;
+}
+.modal-actions button {
+  padding: 8px 20px;
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  transition: all 0.15s;
+}
+.modal-actions .primary {
+  background: var(--indigo);
+  color: white;
+  border-color: var(--indigo);
+}
+.modal-actions .primary:hover { background: #5558E6; }
+
+/* ── Add Category ── */
+.add-category-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+}
+.add-category-row input {
+  flex: 1;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  font-size: 12px;
+  outline: none;
+}
+.add-category-row button {
+  background: var(--indigo);
+  color: white;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+/* ── Assignee select in modal ── */
+.assignee-chips {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+}
+.assignee-chip {
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: all 0.15s;
+  background: var(--surface);
+}
+.assignee-chip.selected {
+  background: var(--indigo-light);
+  border-color: var(--indigo-border);
+  color: var(--indigo);
+  font-weight: 500;
+}
+
+/* Category colors */
+.cat-backend { background: #DBEAFE; color: #1E40AF; }
+.cat-frontend { background: #FCE7F3; color: #9D174D; }
+.cat-business { background: #FEF3C7; color: #92400E; }
+.cat-legal { background: #E0E7FF; color: #3730A3; }
+.cat-design { background: #F3E8FF; color: #6B21A8; }
+.cat-marketing { background: #D1FAE5; color: #065F46; }
+.cat-security { background: #FEE2E2; color: #991B1B; }
+.cat-devops { background: #CCFBF1; color: #115E59; }
+.cat-default { background: var(--surface-hover); color: var(--text-secondary); }
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+/* ── Note tooltip ── */
+.note-popup {
+  position: fixed;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  box-shadow: var(--shadow-md);
+  z-index: 50;
+  max-width: 260px;
+}
+.note-popup textarea {
+  width: 100%;
+  min-height: 60px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 6px 8px;
+  font-family: inherit;
+  font-size: 12px;
+  resize: vertical;
+  outline: none;
+}
+.note-popup textarea:focus { border-color: var(--indigo); }
+.note-popup-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 4px;
+  margin-top: 6px;
+}
+.note-popup-actions button {
+  font-size: 11px;
+  padding: 3px 10px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  cursor: pointer;
+  font-family: inherit;
+}
+.note-popup-actions .save {
+  background: var(--indigo);
+  color: white;
+  border-color: var(--indigo);
+}
+</style>
+</head>
+<body>
+
+<div id="app"></div>
+
+<script>
+// ── State ──
+const PEOPLE = [
+  { id: 'niv', name: 'ניב', color: '#6366F1' },
+  { id: 'omer', name: 'עומר', color: '#22C55E' },
+  { id: 'dana', name: 'דנה', color: '#F59E0B' }
+];
+
+const DEFAULT_CATEGORIES = [
+  { id: 'backend', name: 'Backend', color: '#3B82F6' },
+  { id: 'frontend', name: 'Frontend', color: '#EC4899' },
+  { id: 'business', name: 'Business', color: '#F59E0B' },
+  { id: 'legal', name: 'Legal', color: '#6366F1' },
+  { id: 'design', name: 'Design', color: '#8B5CF6' },
+  { id: 'marketing', name: 'Marketing', color: '#10B981' },
+  { id: 'security', name: 'Security', color: '#EF4444' },
+  { id: 'devops', name: 'DevOps', color: '#14B8A6' },
+];
+
+let state = {
+  categories: [...DEFAULT_CATEGORIES],
+  tasks: [],
+  currentWeek: 1,
+  currentCycle: 1,
+  collapsedCategories: {},
+  nextId: 1,
+  modal: null, // null | 'add' | 'edit' | 'assign'
+  editingTask: null,
+  notePopup: null,
+  addingCategory: false,
+  monthlyWidth: 380,
+};
+
+// ── Persistence (Server API) ──
+async function loadState() {
+  try {
+    const res = await fetch('/api/state');
+    const data = await res.json();
+    state = { ...state, ...data, modal: null, notePopup: null, addingCategory: false, editingTask: null };
+  } catch(e) {
+    console.error('Failed to load state:', e);
+  }
+}
+
+async function save() {
+  try {
+    const d = { ...state };
+    delete d.modal;
+    delete d.notePopup;
+    delete d.addingCategory;
+    delete d.editingTask;
+    await fetch('/api/state', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(d)
+    });
+  } catch(e) {
+    console.error('Failed to save state:', e);
+  }
+}
+
+let saveTimeout;
+function debouncedSave() {
+  clearTimeout(saveTimeout);
+  saveTimeout = setTimeout(() => save(), 500);
+}
+
+// ── Helpers ──
+function getCatClass(catId) {
+  const map = { backend:'cat-backend', frontend:'cat-frontend', business:'cat-business', legal:'cat-legal', design:'cat-design', marketing:'cat-marketing', security:'cat-security', devops:'cat-devops' };
+  return map[catId] || 'cat-default';
+}
+function getWeekLabel(week, cycle) {
+  return `שבוע ${week} · מחזור ${cycle}`;
+}
+function getTasksForPersonWeek(personId) {
+  return state.tasks.filter(t =>
+    t.weeklyAssignment &&
+    t.weeklyAssignment.week === state.currentWeek &&
+    t.weeklyAssignment.cycle === state.currentCycle &&
+    t.assignee === personId
+  );
+}
+
+// ── Drag & Drop ──
+let dragData = null;
+
+// ── Render ──
+function render() {
+  const app = document.getElementById('app');
+  app.innerHTML = `
+    <div class="header">
+      <div class="header-right">
+        <div class="logo">RGB <span>Sprint Planner</span></div>
+      </div>
+      <div class="header-left">
+        <div class="cycle-info">מחזור ${state.currentCycle} · 20 ימים</div>
+      </div>
+    </div>
+    <div class="layout">
+      ${renderMonthly()}
+      <div class="resize-handle" id="resize-handle"></div>
+      ${renderWeekly()}
+    </div>
+    ${state.modal ? renderModal() : ''}
+    ${state.notePopup ? renderNotePopup() : ''}
+  `;
+  attachEvents();
+}
+
+function renderWeekly() {
+  return `
+    <div class="weekly-panel">
+      <div class="weekly-header">
+        <div class="weekly-title">ספרינט שבועי</div>
+        <div class="week-nav">
+          <button onclick="changeWeek(1)" title="שבוע הבא">◀</button>
+          <div class="week-label">${getWeekLabel(state.currentWeek, state.currentCycle)}</div>
+          <button onclick="changeWeek(-1)" title="שבוע קודם">▶</button>
+        </div>
+      </div>
+      <div class="weekly-body">
+        ${PEOPLE.map(p => renderPersonSection(p)).join('')}
+      </div>
+      <div class="weekly-footer">
+        ${PEOPLE.map(p => {
+          const tasks = getTasksForPersonWeek(p.id);
+          const done = tasks.filter(t => t.weeklyAssignment.status === 'done').length;
+          const pct = tasks.length ? Math.round((done / tasks.length) * 100) : 0;
+          return `
+          <div class="progress-row">
+            <div class="progress-person">
+              <div class="person-avatar" style="background:${p.color};width:22px;height:22px;font-size:9px">${p.name.charAt(0)}</div>
+              <span class="progress-name">${p.name}</span>
+            </div>
+            <div class="progress-track">
+              <div class="progress-fill" style="width:${pct}%;background:${p.color}"></div>
+            </div>
+            <span class="progress-pct">${pct}%</span>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function renderPersonSection(person) {
+  const tasks = getTasksForPersonWeek(person.id);
+  const done = tasks.filter(t => t.weeklyAssignment.status === 'done').length;
+  return `
+    <div class="person-section">
+      <div class="person-header">
+        <div class="person-name">
+          <div class="person-avatar" style="background:${person.color}">${person.name.charAt(0)}</div>
+          ${person.name}
+        </div>
+        <div class="person-stats">${done}/${tasks.length} הושלמו</div>
+      </div>
+      <div class="person-tasks" data-person="${person.id}"
+           ondragover="onWeeklyDragOver(event)" ondragleave="onWeeklyDragLeave(event)" ondrop="onWeeklyDrop(event, '${person.id}')">
+        ${tasks.length === 0 ? `<div class="empty-person">גרור משימות מהמונטלי או לחץ ←</div>` :
+          tasks.map(t => renderWeeklyTask(t)).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function renderWeeklyTask(task) {
+  const st = task.weeklyAssignment.status;
+  const statusClass = st === 'progress' ? 'in-progress' : st === 'done' ? 'done' : '';
+  const checkmark = st === 'done' ? '✓' : st === 'progress' ? '◑' : '';
+  const nameClass = st === 'done' ? 'weekly-task-name done-text' : 'weekly-task-name';
+  const cat = state.categories.find(c => c.id === task.category);
+  return `
+    <div class="weekly-task" draggable="true" data-task-id="${task.id}"
+         ondragstart="onDragStart(event, ${task.id}, 'weekly')">
+      <div class="status-btn ${statusClass}" onclick="cycleStatus(${task.id})" title="שנה סטטוס">${checkmark}</div>
+      <div class="${nameClass}">${task.name}</div>
+      ${cat ? `<span class="weekly-task-cat ${getCatClass(task.category)}">${cat.name}</span>` : ''}
+      <span class="task-note-icon" onclick="openNote(event, ${task.id})" title="הערה">${task.note ? '📝' : '💬'}</span>
+      <span class="remove-weekly" onclick="removeFromWeekly(${task.id})" title="החזר למונטלי">✕</span>
+    </div>
+  `;
+}
+
+function renderMonthly() {
+  const grouped = {};
+  state.categories.forEach(c => grouped[c.id] = []);
+  state.tasks.forEach(t => {
+    if (grouped[t.category]) grouped[t.category].push(t);
+  });
+  return `
+    <div class="monthly-panel" style="width:${state.monthlyWidth}px">
+      <div class="monthly-header">
+        <div class="monthly-title">Backlog מונטלי</div>
+        <button class="add-task-btn" onclick="openAddModal()">+ משימה חדשה</button>
+      </div>
+      <div class="monthly-body">
+        ${state.categories.map(cat => {
+          const tasks = grouped[cat.id] || [];
+          const collapsed = state.collapsedCategories[cat.id];
+          return `
+            <div class="category-group">
+              <div class="category-header" onclick="toggleCategory('${cat.id}')">
+                <div class="category-label">
+                  <div class="category-dot" style="background:${cat.color}"></div>
+                  ${cat.name}
+                </div>
+                <div style="display:flex;align-items:center;gap:6px">
+                  <span class="category-count">${tasks.length}</span>
+                  <span class="category-chevron ${collapsed ? 'collapsed' : ''}">▼</span>
+                </div>
+              </div>
+              ${!collapsed ? `<div class="category-tasks">
+                ${tasks.map(t => renderMonthlyTask(t)).join('')}
+              </div>` : ''}
+            </div>
+          `;
+        }).join('')}
+        ${state.addingCategory ? `
+          <div class="add-category-row">
+            <input id="new-cat-input" placeholder="שם קטגוריה חדשה..." autofocus />
+            <button onclick="addCategory()">הוסף</button>
+          </div>
+        ` : `
+          <div style="padding:8px">
+            <span style="font-size:12px;color:var(--text-muted);cursor:pointer" onclick="state.addingCategory=true;render()">+ קטגוריה חדשה</span>
+          </div>
+        `}
+      </div>
+    </div>
+  `;
+}
+
+function renderMonthlyTask(task) {
+  const pulled = task.weeklyAssignment !== null;
+  const person = PEOPLE.find(p => p.id === task.assignee);
+  return `
+    <div class="monthly-task ${pulled ? 'pulled' : ''}" draggable="true" data-task-id="${task.id}"
+         ondragstart="onDragStart(event, ${task.id}, 'monthly')">
+      <div class="priority-dot ${task.priority}"></div>
+      <div class="monthly-task-name">${task.name}</div>
+      ${pulled ? `<span class="pulled-tag">ש׳${task.weeklyAssignment.week}</span>` : ''}
+      ${person ? `<div class="person-avatar" style="background:${person.color};width:18px;height:18px;font-size:9px;flex-shrink:0">${person.name.charAt(0)}</div>` : ''}
+      ${!pulled ? `<button class="push-btn" onclick="openAssignModal(${task.id})" title="העבר לוויקלי">←</button>` : ''}
+      <span class="edit-btn" onclick="openEditModal(${task.id})" title="ערוך">✎</span>
+      <span class="delete-btn" onclick="deleteTask(${task.id})" title="מחק">🗑</span>
+    </div>
+  `;
+}
+
+function renderModal() {
+  if (state.modal === 'add' || state.modal === 'edit') {
+    const t = state.editingTask || {};
+    const isEdit = state.modal === 'edit';
+    return `
+      <div class="modal-overlay" onclick="closeModal(event)">
+        <div class="modal" onclick="event.stopPropagation()">
+          <h3>${isEdit ? 'ערוך משימה' : 'משימה חדשה'}</h3>
+          <label>שם המשימה</label>
+          <input id="m-name" value="${t.name || ''}" placeholder="תאר את המשימה..." />
+          <label>קטגוריה</label>
+          <select id="m-cat">
+            ${state.categories.map(c => `<option value="${c.id}" ${t.category === c.id ? 'selected' : ''}>${c.name}</option>`).join('')}
+          </select>
+          <label>עדיפות</label>
+          <select id="m-priority">
+            <option value="p0" ${t.priority === 'p0' ? 'selected' : ''}>P0 — קריטי</option>
+            <option value="p1" ${t.priority === 'p1' ? 'selected' : ''}>P1 — חשוב</option>
+            <option value="p2" ${t.priority === 'p2' ? 'selected' : ''}>P2 — עתידי</option>
+          </select>
+          <label>אחראי</label>
+          <div class="assignee-chips">
+            ${PEOPLE.map(p => `<div class="assignee-chip ${t.assignee === p.id ? 'selected' : ''}" data-person="${p.id}" onclick="selectAssigneeChip('${p.id}')">${p.name}</div>`).join('')}
+          </div>
+          <label>הערה</label>
+          <textarea id="m-note" placeholder="פרטים נוספים...">${t.note || ''}</textarea>
+          <div class="modal-actions">
+            <button class="primary" onclick="saveTask()">${isEdit ? 'שמור' : 'הוסף'}</button>
+            <button onclick="state.modal=null;render()">ביטול</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+  if (state.modal === 'assign') {
+    const t = state.editingTask;
+    return `
+      <div class="modal-overlay" onclick="closeModal(event)">
+        <div class="modal" onclick="event.stopPropagation()">
+          <h3>העבר לוויקלי — שבוע ${state.currentWeek}</h3>
+          <p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px">${t.name}</p>
+          <label>שייך ל</label>
+          <div class="assignee-chips">
+            ${PEOPLE.map(p => `<div class="assignee-chip ${t.assignee === p.id ? 'selected' : ''}" data-person="${p.id}" onclick="selectAssigneeChip('${p.id}')">${p.name}</div>`).join('')}
+          </div>
+          <div class="modal-actions">
+            <button class="primary" onclick="confirmAssign()">העבר</button>
+            <button onclick="state.modal=null;render()">ביטול</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+  return '';
+}
+
+function renderNotePopup() {
+  const np = state.notePopup;
+  const task = state.tasks.find(t => t.id === np.taskId);
+  return `
+    <div class="note-popup" style="top:${np.y}px;left:${np.x}px">
+      <textarea id="note-text">${task.note || ''}</textarea>
+      <div class="note-popup-actions">
+        <button class="save" onclick="saveNote()">שמור</button>
+        <button onclick="state.notePopup=null;render()">סגור</button>
+      </div>
+    </div>
+  `;
+}
+
+// ── Actions ──
+window.changeWeek = function(dir) {
+  state.currentWeek += dir;
+  if (state.currentWeek < 1) { state.currentWeek = 4; state.currentCycle--; if(state.currentCycle<1) state.currentCycle=1; }
+  if (state.currentWeek > 4) { state.currentWeek = 1; state.currentCycle++; }
+  render();
+};
+
+window.toggleCategory = function(catId) {
+  state.collapsedCategories[catId] = !state.collapsedCategories[catId];
+  debouncedSave();
+  render();
+};
+
+window.openAddModal = function() {
+  state.editingTask = { assignee: 'niv' };
+  state.modal = 'add';
+  render();
+};
+
+window.openEditModal = function(id) {
+  state.editingTask = { ...state.tasks.find(t => t.id === id) };
+  state.modal = 'edit';
+  render();
+};
+
+window.openAssignModal = function(id) {
+  state.editingTask = { ...state.tasks.find(t => t.id === id) };
+  state.modal = 'assign';
+  render();
+};
+
+window.selectAssigneeChip = function(personId) {
+  state.editingTask.assignee = personId;
+  document.querySelectorAll('.assignee-chip').forEach(el => {
+    el.classList.toggle('selected', el.dataset.person === personId);
+  });
+};
+
+window.saveTask = function() {
+  const name = document.getElementById('m-name').value.trim();
+  if (!name) return;
+  const cat = document.getElementById('m-cat').value;
+  const priority = document.getElementById('m-priority').value;
+  const note = document.getElementById('m-note').value.trim();
+  const assignee = state.editingTask.assignee;
+
+  if (state.modal === 'edit') {
+    const t = state.tasks.find(t => t.id === state.editingTask.id);
+    if (t) { t.name = name; t.category = cat; t.priority = priority; t.note = note; t.assignee = assignee; }
+  } else {
+    state.tasks.push({
+      id: state.nextId++,
+      name, category: cat, priority, assignee, note,
+      weeklyAssignment: null,
+    });
+  }
+  state.modal = null;
+  state.editingTask = null;
+  debouncedSave();
+  render();
+};
+
+window.confirmAssign = function() {
+  const t = state.tasks.find(t => t.id === state.editingTask.id);
+  if (t) {
+    t.assignee = state.editingTask.assignee;
+    t.weeklyAssignment = { week: state.currentWeek, cycle: state.currentCycle, status: 'todo' };
+  }
+  state.modal = null;
+  state.editingTask = null;
+  debouncedSave();
+  render();
+};
+
+window.deleteTask = function(id) {
+  state.tasks = state.tasks.filter(t => t.id !== id);
+  debouncedSave();
+  render();
+};
+
+window.removeFromWeekly = function(id) {
+  const t = state.tasks.find(t => t.id === id);
+  if (t) t.weeklyAssignment = null;
+  debouncedSave();
+  render();
+};
+
+window.cycleStatus = function(id) {
+  const t = state.tasks.find(t => t.id === id);
+  if (!t || !t.weeklyAssignment) return;
+  const order = ['todo', 'progress', 'done'];
+  const idx = order.indexOf(t.weeklyAssignment.status);
+  t.weeklyAssignment.status = order[(idx + 1) % 3];
+  debouncedSave();
+  render();
+};
+
+window.openNote = function(e, id) {
+  e.stopPropagation();
+  const rect = e.target.getBoundingClientRect();
+  state.notePopup = { taskId: id, x: rect.left - 220, y: rect.bottom + 4 };
+  render();
+};
+
+window.saveNote = function() {
+  const t = state.tasks.find(t => t.id === state.notePopup.taskId);
+  if (t) t.note = document.getElementById('note-text').value.trim();
+  state.notePopup = null;
+  debouncedSave();
+  render();
+};
+
+window.closeModal = function(e) {
+  if (e.target.classList.contains('modal-overlay')) {
+    state.modal = null;
+    state.editingTask = null;
+    render();
+  }
+};
+
+window.addCategory = function() {
+  const input = document.getElementById('new-cat-input');
+  const name = input.value.trim();
+  if (!name) return;
+  const id = name.toLowerCase().replace(/\s+/g, '-');
+  const colors = ['#6366F1','#EC4899','#F59E0B','#10B981','#8B5CF6','#EF4444','#14B8A6','#3B82F6'];
+  state.categories.push({ id, name, color: colors[state.categories.length % colors.length] });
+  state.addingCategory = false;
+  debouncedSave();
+  render();
+};
+
+// ── Drag & Drop ──
+window.onDragStart = function(e, taskId, source) {
+  dragData = { taskId, source };
+  e.dataTransfer.effectAllowed = 'move';
+  e.target.classList.add('dragging');
+  setTimeout(() => e.target.classList.remove('dragging'), 0);
+};
+
+window.onWeeklyDragOver = function(e) {
+  e.preventDefault();
+  e.currentTarget.classList.add('drag-over');
+};
+
+window.onWeeklyDragLeave = function(e) {
+  e.currentTarget.classList.remove('drag-over');
+};
+
+window.onWeeklyDrop = function(e, personId) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('drag-over');
+  if (!dragData) return;
+  const t = state.tasks.find(t => t.id === dragData.taskId);
+  if (t) {
+    t.assignee = personId;
+    t.weeklyAssignment = { week: state.currentWeek, cycle: state.currentCycle, status: t.weeklyAssignment ? t.weeklyAssignment.status : 'todo' };
+  }
+  dragData = null;
+  debouncedSave();
+  render();
+};
+
+// ── Keyboard ──
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    if (state.notePopup) { state.notePopup = null; render(); }
+    else if (state.modal) { state.modal = null; state.editingTask = null; render(); }
+  }
+  if (e.key === 'Enter' && state.addingCategory) { addCategory(); }
+});
+
+// Click outside note popup
+document.addEventListener('click', e => {
+  if (state.notePopup && !e.target.closest('.note-popup') && !e.target.closest('.task-note-icon')) {
+    state.notePopup = null;
+    render();
+  }
+});
+
+function attachEvents() {
+  // Resize handle
+  const handle = document.getElementById('resize-handle');
+  const monthly = document.querySelector('.monthly-panel');
+  if (!handle || !monthly) return;
+  let startX, startW;
+  handle.addEventListener('mousedown', e => {
+    e.preventDefault();
+    startX = e.clientX;
+    startW = monthly.offsetWidth;
+    handle.classList.add('active');
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    const onMove = ev => {
+      // RTL: moving mouse left (negative delta) = wider panel
+      const delta = startX - ev.clientX;
+      const newW = Math.min(Math.max(startW + delta, 380), window.innerWidth * 0.7);
+      monthly.style.width = newW + 'px';
+      state.monthlyWidth = newW;
+    };
+    const onUp = () => {
+      save();
+      handle.classList.remove('active');
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+}
+
+// ── Initial render ──
+async function init() {
+  await loadState();
+  render();
+}
+init();
+
+// ── Auto-refresh (poll every 30s for teammate changes) ──
+setInterval(async () => {
+  if (!state.modal && !state.notePopup) {
+    await loadState();
+    render();
+  }
+}, 30000);
+</script>
+</body>
+</html>
