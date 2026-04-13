@@ -67,6 +67,11 @@ function getSeedData() {
     collapsedCategories: {},
     nextId,
     monthlyWidth: 380,
+    currentView: 'sprint',
+    meetings: [],
+    meetingNextId: 1,
+    calendarMonth: new Date().getMonth(),
+    calendarYear: new Date().getFullYear(),
   };
 }
 
