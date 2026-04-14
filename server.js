@@ -12,10 +12,17 @@ const DATA_DIR = process.env.RAILWAY_VOLUME_MOUNT_PATH
   : path.join(__dirname, 'data');
 const DATA_FILE = path.join(DATA_DIR, 'sprint-data.json');
 
+const BACKUP_FILE = path.join(DATA_DIR, 'sprint-data.backup.json');
+
 // Ensure data directory exists
 if (!fs.existsSync(DATA_DIR)) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
 }
+
+// Log volume status on startup
+console.log(`[DATA] Volume mount: ${process.env.RAILWAY_VOLUME_MOUNT_PATH || '(none — using local ./data)'}`);
+console.log(`[DATA] Data file: ${DATA_FILE}`);
+console.log(`[DATA] File exists: ${fs.existsSync(DATA_FILE)}`);
 
 // Seed data
 function getSeedData() {
@@ -97,6 +104,10 @@ app.get('/api/state', (req, res) => {
 
 app.post('/api/state', (req, res) => {
   try {
+    // Backup current file before overwriting
+    if (fs.existsSync(DATA_FILE)) {
+      try { fs.copyFileSync(DATA_FILE, BACKUP_FILE); } catch {}
+    }
     fs.writeFileSync(DATA_FILE, JSON.stringify(req.body, null, 2), 'utf8');
     res.json({ ok: true });
   } catch (e) {
@@ -111,6 +122,38 @@ app.post('/api/state/reset', (req, res) => {
     res.json(seed);
   } catch (e) {
     res.status(500).json({ error: 'Failed to reset state' });
+  }
+});
+
+// Restore from backup
+app.post('/api/state/restore-backup', (req, res) => {
+  try {
+    if (!fs.existsSync(BACKUP_FILE)) {
+      return res.status(404).json({ error: 'No backup found' });
+    }
+    const backup = fs.readFileSync(BACKUP_FILE, 'utf8');
+    fs.writeFileSync(DATA_FILE, backup, 'utf8');
+    res.json(JSON.parse(backup));
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to restore backup' });
+  }
+});
+
+// Health check — shows data stats
+app.get('/api/health', (req, res) => {
+  try {
+    const data = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+    const hasBackup = fs.existsSync(BACKUP_FILE);
+    res.json({
+      ok: true,
+      volume: process.env.RAILWAY_VOLUME_MOUNT_PATH || null,
+      dataFile: fs.existsSync(DATA_FILE),
+      tasks: data.tasks?.length || 0,
+      meetings: data.meetings?.length || 0,
+      hasBackup,
+    });
+  } catch (e) {
+    res.json({ ok: false, error: e.message });
   }
 });
 

@@ -1787,7 +1787,8 @@ init();
 
 // ── Auto-refresh (poll every 30s for teammate changes) ──
 setInterval(async () => {
-  if (!state.modal && !state.notePopup && !state.meetingModal) {
+  // Skip refresh if modal open, save pending, or undo active
+  if (!state.modal && !state.notePopup && !state.meetingModal && !saveTimeout && !currentUndo) {
     await loadState();
     render();
   }
