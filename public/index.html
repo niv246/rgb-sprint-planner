@@ -972,7 +972,11 @@ let state = {
 async function loadState() {
   try {
     const res = await fetch('/api/state');
+    if (res.status === 401) { window.location.href = '/login'; return; }
+    if (!res.ok) { console.error('Load failed:', res.status); return; }
     const data = await res.json();
+    // Protect against loading empty/error responses
+    if (!data.tasks || !Array.isArray(data.tasks)) { console.error('Invalid state from server'); return; }
     state = { ...state, ...data, modal: null, notePopup: null, addingCategory: false, editingTask: null, meetingModal: null, editingMeeting: null, undoStack: state.undoStack || [] };
   } catch(e) {
     console.error('Failed to load state:', e);
@@ -989,11 +993,18 @@ async function saveToServer() {
     delete d.meetingModal;
     delete d.editingMeeting;
     delete d.undoStack;
-    await fetch('/api/state', {
+    const res = await fetch('/api/state', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(d)
     });
+    if (res.status === 401) { window.location.href = '/login'; return; }
+    if (res.status === 409) {
+      // Server blocked save to prevent data loss — reload fresh state
+      console.warn('Save blocked by server (anti-overwrite), reloading...');
+      await loadState();
+      render();
+    }
   } catch(e) {
     console.error('Failed to save state:', e);
   }

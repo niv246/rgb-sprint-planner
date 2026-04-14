@@ -21,9 +21,14 @@ if (!fs.existsSync(DATA_DIR)) {
 }
 
 // Log volume status on startup
-console.log(`[DATA] Volume mount: ${process.env.RAILWAY_VOLUME_MOUNT_PATH || '(none — using local ./data)'}`);
+const HAS_VOLUME = !!process.env.RAILWAY_VOLUME_MOUNT_PATH;
+console.log(`[DATA] Volume mount: ${process.env.RAILWAY_VOLUME_MOUNT_PATH || '⚠️  NONE — data will be lost on redeploy!'}`);
 console.log(`[DATA] Data file: ${DATA_FILE}`);
 console.log(`[DATA] File exists: ${fs.existsSync(DATA_FILE)}`);
+if (!HAS_VOLUME) console.warn('[DATA] ⚠️  No persistent volume! Add RAILWAY_VOLUME_MOUNT_PATH=/app/data in Railway.');
+
+// In-memory cache — survives file deletion during deploy
+let memoryCache = null;
 
 // ── Auth ──
 const ALLOWED_EMAILS = ['nivye@rgb-ai.com', 'dana@rgb-ai.com', 'omer@rgb-ai.com'];
@@ -262,9 +267,20 @@ function getSeedData() {
   };
 }
 
-// Create seed file if it doesn't exist
-if (!fs.existsSync(DATA_FILE)) {
-  fs.writeFileSync(DATA_FILE, JSON.stringify(getSeedData(), null, 2), 'utf8');
+// Load or create data file
+if (fs.existsSync(DATA_FILE)) {
+  try {
+    memoryCache = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+    console.log(`[DATA] Loaded: ${memoryCache.tasks?.length || 0} tasks, ${memoryCache.meetings?.length || 0} meetings`);
+  } catch (e) {
+    console.error('[DATA] Failed to parse data file, using seed');
+    memoryCache = getSeedData();
+    fs.writeFileSync(DATA_FILE, JSON.stringify(memoryCache, null, 2), 'utf8');
+  }
+} else {
+  console.log('[DATA] No data file found, creating seed');
+  memoryCache = getSeedData();
+  fs.writeFileSync(DATA_FILE, JSON.stringify(memoryCache, null, 2), 'utf8');
 }
 
 // ── Middleware ──
@@ -321,19 +337,49 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.get('/api/state', (req, res) => {
   try {
     const data = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+    memoryCache = data; // keep cache fresh
     res.json(data);
   } catch (e) {
-    res.json(getSeedData());
+    // File missing (deploy without volume) — serve from memory cache
+    if (memoryCache) {
+      console.warn('[DATA] File read failed, serving from memory cache');
+      res.json(memoryCache);
+    } else {
+      res.json(getSeedData());
+    }
   }
 });
 
 app.post('/api/state', (req, res) => {
   try {
+    const incoming = req.body;
+    const incomingTasks = incoming.tasks?.length || 0;
+    const incomingMeetings = incoming.meetings?.length || 0;
+
+    // Anti-overwrite: reject saves that would wipe data
+    if (memoryCache) {
+      const cacheTasks = memoryCache.tasks?.length || 0;
+      const cacheMeetings = memoryCache.meetings?.length || 0;
+
+      // Block if incoming has drastically fewer items (likely stale/empty client)
+      if (cacheTasks > 3 && incomingTasks === 0) {
+        console.warn(`[DATA] ⚠️  BLOCKED save: would erase ${cacheTasks} tasks (incoming has 0)`);
+        return res.status(409).json({ error: 'Blocked: would erase all tasks', serverTasks: cacheTasks });
+      }
+      if (cacheMeetings > 0 && incomingMeetings === 0 && incomingTasks <= cacheTasks) {
+        // Allow if user intentionally deleted all meetings via normal flow
+        // But log it for debugging
+        console.warn(`[DATA] ⚠️  Meetings will be cleared: ${cacheMeetings} → 0`);
+      }
+    }
+
     // Backup current file before overwriting
     if (fs.existsSync(DATA_FILE)) {
       try { fs.copyFileSync(DATA_FILE, BACKUP_FILE); } catch {}
     }
-    fs.writeFileSync(DATA_FILE, JSON.stringify(req.body, null, 2), 'utf8');
+
+    fs.writeFileSync(DATA_FILE, JSON.stringify(incoming, null, 2), 'utf8');
+    memoryCache = incoming; // update cache
     res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ error: 'Failed to save state' });
@@ -342,8 +388,12 @@ app.post('/api/state', (req, res) => {
 
 app.post('/api/state/reset', (req, res) => {
   try {
+    if (fs.existsSync(DATA_FILE)) {
+      try { fs.copyFileSync(DATA_FILE, BACKUP_FILE); } catch {}
+    }
     const seed = getSeedData();
     fs.writeFileSync(DATA_FILE, JSON.stringify(seed, null, 2), 'utf8');
+    memoryCache = seed;
     res.json(seed);
   } catch (e) {
     res.status(500).json({ error: 'Failed to reset state' });
@@ -358,7 +408,8 @@ app.post('/api/state/restore-backup', (req, res) => {
     }
     const backup = fs.readFileSync(BACKUP_FILE, 'utf8');
     fs.writeFileSync(DATA_FILE, backup, 'utf8');
-    res.json(JSON.parse(backup));
+    memoryCache = JSON.parse(backup);
+    res.json(memoryCache);
   } catch (e) {
     res.status(500).json({ error: 'Failed to restore backup' });
   }
@@ -544,6 +595,7 @@ app.post('/api/sync-github', async (req, res) => {
     }
 
     fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), 'utf8');
+    memoryCache = data;
     res.json({ ok: true, added, updated, total: allItems.length });
   } catch (e) {
     console.error('GitHub sync error:', e);
