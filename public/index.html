@@ -1084,6 +1084,7 @@ function renderMonthly() {
     <div class="monthly-panel" style="width:${state.monthlyWidth}px">
       <div class="monthly-header">
         <div class="monthly-title">Backlog מונטלי</div>
+        <button class="add-task-btn" style="background:#24292F;margin-left:6px;" onclick="syncGitHub()" id="sync-btn">⟳ GitHub</button>
         <button class="add-task-btn" onclick="openAddModal()">+ משימה חדשה</button>
       </div>
       <div class="monthly-body">
@@ -1636,6 +1637,34 @@ function attachEvents() {
     document.addEventListener('mousemove', onMove);
     document.addEventListener('mouseup', onUp);
   });
+}
+
+// ── GitHub Projects Sync ──
+async function syncGitHub() {
+  const btn = document.getElementById('sync-btn');
+  if (!btn) return;
+  const original = btn.textContent;
+  btn.textContent = '⏳ מסנכרן...';
+  btn.disabled = true;
+  try {
+    const res = await fetch('/api/sync-github', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+    const data = await res.json();
+    if (!res.ok) {
+      btn.textContent = '✗ שגיאה';
+      alert('שגיאת סנכרון: ' + (data.error || 'Unknown'));
+    } else {
+      btn.textContent = `✓ ${data.added} חדשות, ${data.updated} עודכנו`;
+      await loadState();
+      render();
+    }
+  } catch (e) {
+    btn.textContent = '✗ שגיאה';
+    alert('שגיאת סנכרון: ' + e.message);
+  }
+  setTimeout(() => {
+    btn.textContent = original;
+    btn.disabled = false;
+  }, 3000);
 }
 
 // ── Initial render ──
