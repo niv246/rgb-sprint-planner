@@ -2,6 +2,8 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const fetch = require('node-fetch');
+const cookieParser = require('cookie-parser');
+const crypto = require('crypto');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -11,7 +13,6 @@ const DATA_DIR = process.env.RAILWAY_VOLUME_MOUNT_PATH
   ? process.env.RAILWAY_VOLUME_MOUNT_PATH
   : path.join(__dirname, 'data');
 const DATA_FILE = path.join(DATA_DIR, 'sprint-data.json');
-
 const BACKUP_FILE = path.join(DATA_DIR, 'sprint-data.backup.json');
 
 // Ensure data directory exists
@@ -23,6 +24,184 @@ if (!fs.existsSync(DATA_DIR)) {
 console.log(`[DATA] Volume mount: ${process.env.RAILWAY_VOLUME_MOUNT_PATH || '(none — using local ./data)'}`);
 console.log(`[DATA] Data file: ${DATA_FILE}`);
 console.log(`[DATA] File exists: ${fs.existsSync(DATA_FILE)}`);
+
+// ── Auth ──
+const ALLOWED_EMAILS = ['nivye@rgb-ai.com', 'dana@rgb-ai.com', 'omer@rgb-ai.com'];
+const AUTH_COOKIE = 'rgb_session';
+const COOKIE_MAX_AGE = 30 * 24 * 60 * 60 * 1000; // 30 days
+
+function generateToken(email) {
+  const secret = process.env.APP_PASSWORD || 'fallback';
+  return crypto.createHmac('sha256', secret).update(email).digest('hex');
+}
+
+function authMiddleware(req, res, next) {
+  if (req.path === '/login' || req.path === '/api/login') return next();
+  if (req.path.endsWith('.css') || req.path.endsWith('.ico')) return next();
+
+  const cookie = req.cookies[AUTH_COOKIE];
+  if (!cookie) {
+    if (req.path.startsWith('/api/')) return res.status(401).json({ error: 'Not authenticated' });
+    return res.redirect('/login');
+  }
+
+  try {
+    const parsed = JSON.parse(Buffer.from(cookie, 'base64').toString());
+    const expected = generateToken(parsed.email);
+    if (parsed.token === expected && ALLOWED_EMAILS.includes(parsed.email)) {
+      req.userEmail = parsed.email;
+      return next();
+    }
+  } catch (e) {}
+
+  res.clearCookie(AUTH_COOKIE);
+  if (req.path.startsWith('/api/')) return res.status(401).json({ error: 'Invalid session' });
+  return res.redirect('/login');
+}
+
+// ── Login Page HTML ──
+const LOGIN_HTML = `<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RGB Sprint Planner — Login</title>
+<link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Rubik', sans-serif;
+    background: #F8F8F6;
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .login-card {
+    background: white;
+    border-radius: 12px;
+    padding: 40px 32px;
+    width: 360px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+    text-align: center;
+  }
+  .login-logo {
+    font-size: 24px;
+    font-weight: 700;
+    color: #6366F1;
+    margin-bottom: 4px;
+  }
+  .login-logo span { color: #9B9B9B; font-weight: 400; font-size: 14px; }
+  .login-subtitle {
+    font-size: 13px;
+    color: #6B6B6B;
+    margin-bottom: 28px;
+  }
+  .field { margin-bottom: 16px; text-align: right; }
+  .field label {
+    display: block;
+    font-size: 12px;
+    font-weight: 500;
+    color: #6B6B6B;
+    margin-bottom: 4px;
+  }
+  .field input {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #E5E5E0;
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: 14px;
+    outline: none;
+    transition: border 0.15s;
+    direction: ltr;
+    text-align: left;
+  }
+  .field input:focus { border-color: #6366F1; }
+  .login-btn {
+    width: 100%;
+    padding: 11px;
+    background: #6366F1;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s;
+    margin-top: 8px;
+  }
+  .login-btn:hover { background: #5558E6; }
+  .login-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+  .error-msg {
+    color: #EF4444;
+    font-size: 12px;
+    margin-top: 12px;
+    display: none;
+  }
+</style>
+</head>
+<body>
+<div class="login-card">
+  <div class="login-logo">RGB <span>Sprint Planner</span></div>
+  <div class="login-subtitle">כניסה לצוות המייסדים</div>
+  <div class="field">
+    <label>אימייל</label>
+    <input type="email" id="email" placeholder="you@rgb-ai.com" />
+  </div>
+  <div class="field">
+    <label>סיסמה</label>
+    <input type="password" id="password" placeholder="סיסמה" />
+  </div>
+  <button class="login-btn" id="login-btn" onclick="doLogin()">כניסה</button>
+  <div class="error-msg" id="error-msg"></div>
+</div>
+<script>
+  document.getElementById('email').focus();
+  document.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+
+  async function doLogin() {
+    const email = document.getElementById('email').value.trim();
+    const password = document.getElementById('password').value;
+    const btn = document.getElementById('login-btn');
+    const err = document.getElementById('error-msg');
+
+    if (!email || !password) {
+      err.textContent = 'נא למלא אימייל וסיסמה';
+      err.style.display = 'block';
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'מתחבר...';
+    err.style.display = 'none';
+
+    try {
+      const res = await fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+      const data = await res.json();
+
+      if (data.ok) {
+        window.location.href = '/';
+      } else {
+        err.textContent = data.error || 'שגיאה בכניסה';
+        err.style.display = 'block';
+      }
+    } catch (e) {
+      err.textContent = 'שגיאת חיבור';
+      err.style.display = 'block';
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'כניסה';
+    }
+  }
+</script>
+</body>
+</html>`;
 
 // Seed data
 function getSeedData() {
@@ -88,11 +267,57 @@ if (!fs.existsSync(DATA_FILE)) {
   fs.writeFileSync(DATA_FILE, JSON.stringify(getSeedData(), null, 2), 'utf8');
 }
 
-// Middleware
+// ── Middleware ──
 app.use(express.json({ limit: '1mb' }));
+app.use(cookieParser());
+
+// ── Login routes (BEFORE auth middleware) ──
+app.get('/login', (req, res) => {
+  res.send(LOGIN_HTML);
+});
+
+app.post('/api/login', (req, res) => {
+  const { email, password } = req.body;
+  const appPassword = process.env.APP_PASSWORD;
+
+  if (!appPassword) {
+    return res.status(500).json({ error: 'APP_PASSWORD not configured' });
+  }
+
+  const normalizedEmail = (email || '').trim().toLowerCase();
+
+  if (!ALLOWED_EMAILS.includes(normalizedEmail)) {
+    return res.status(401).json({ error: 'אימייל לא מורשה' });
+  }
+
+  if (password !== appPassword) {
+    return res.status(401).json({ error: 'סיסמה שגויה' });
+  }
+
+  const token = generateToken(normalizedEmail);
+  const cookieValue = Buffer.from(JSON.stringify({ email: normalizedEmail, token })).toString('base64');
+
+  res.cookie(AUTH_COOKIE, cookieValue, {
+    maxAge: COOKIE_MAX_AGE,
+    httpOnly: true,
+    sameSite: 'lax',
+  });
+
+  res.json({ ok: true, email: normalizedEmail });
+});
+
+app.get('/api/logout', (req, res) => {
+  res.clearCookie(AUTH_COOKIE);
+  res.redirect('/login');
+});
+
+// ── Auth gate — everything below requires login ──
+app.use(authMiddleware);
+
+// ── Static files (protected) ──
 app.use(express.static(path.join(__dirname, 'public')));
 
-// API endpoints
+// ── API endpoints ──
 app.get('/api/state', (req, res) => {
   try {
     const data = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
@@ -278,34 +503,22 @@ app.post('/api/sync-github', async (req, res) => {
       const assigneeLogin = content.assignees?.nodes?.[0]?.login;
       const assignee = ASSIGNEE_MAP[assigneeLogin] || 'niv';
 
-      // Determine category from labels
       let category = 'backend';
       for (const label of labels) {
-        if (LABEL_CATEGORY_MAP[label]) {
-          category = LABEL_CATEGORY_MAP[label];
-          break;
-        }
+        if (LABEL_CATEGORY_MAP[label]) { category = LABEL_CATEGORY_MAP[label]; break; }
       }
 
-      // Determine priority from labels
       let priority = 'p1';
       for (const label of labels) {
-        if (LABEL_PRIORITY_MAP[label]) {
-          priority = LABEL_PRIORITY_MAP[label];
-          break;
-        }
+        if (LABEL_PRIORITY_MAP[label]) { priority = LABEL_PRIORITY_MAP[label]; break; }
       }
 
-      // Check field values for Status
       const fieldValues = item.fieldValues?.nodes || [];
       let statusField = null;
       for (const fv of fieldValues) {
-        if (fv.field?.name === 'Status') {
-          statusField = fv.name;
-        }
+        if (fv.field?.name === 'Status') statusField = fv.name;
       }
 
-      // Upsert — find by githubId
       const existing = data.tasks.find(t => t.githubId === githubId);
       if (existing) {
         existing.name = title;
@@ -330,7 +543,6 @@ app.post('/api/sync-github', async (req, res) => {
       }
     }
 
-    // Save
     fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), 'utf8');
     res.json({ ok: true, added, updated, total: allItems.length });
   } catch (e) {
