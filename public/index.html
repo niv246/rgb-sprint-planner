@@ -483,6 +483,58 @@ body {
 .monthly-task:hover .delete-btn { opacity: 1; }
 .delete-btn:hover { color: var(--red); }
 
+/* ── Undo Toast ── */
+.undo-toast {
+  position: fixed;
+  bottom: -60px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1A1A1A;
+  color: #fff;
+  padding: 10px 20px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 14px;
+  font-family: 'Rubik', sans-serif;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+  z-index: 9999;
+  transition: bottom 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  direction: rtl;
+}
+.undo-toast.show { bottom: 24px; }
+.undo-toast .undo-btn {
+  background: none;
+  border: 1px solid rgba(255,255,255,0.3);
+  color: #6366F1;
+  font-weight: 600;
+  font-size: 14px;
+  font-family: 'Rubik', sans-serif;
+  cursor: pointer;
+  padding: 4px 14px;
+  border-radius: 6px;
+  transition: all 0.15s;
+}
+.undo-toast .undo-btn:hover { background: rgba(99,102,241,0.15); border-color: #6366F1; }
+.undo-toast .undo-timer {
+  width: 100%;
+  height: 3px;
+  background: rgba(255,255,255,0.15);
+  border-radius: 2px;
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  overflow: hidden;
+}
+.undo-toast .undo-timer-bar {
+  height: 100%;
+  background: #6366F1;
+  border-radius: 2px;
+  animation: undoCountdown 8s linear forwards;
+}
+@keyframes undoCountdown { from { width: 100%; } to { width: 0%; } }
+
 .priority-dot {
   width: 6px;
   height: 6px;
@@ -913,6 +965,7 @@ let state = {
   calendarYear: new Date().getFullYear(),
   meetingModal: null, // null | 'add' | 'edit'
   editingMeeting: null,
+  undoStack: [],  // [{type, item, timestamp}]
 };
 
 // ── Persistence (Server API) ──
@@ -920,7 +973,7 @@ async function loadState() {
   try {
     const res = await fetch('/api/state');
     const data = await res.json();
-    state = { ...state, ...data, modal: null, notePopup: null, addingCategory: false, editingTask: null, meetingModal: null, editingMeeting: null };
+    state = { ...state, ...data, modal: null, notePopup: null, addingCategory: false, editingTask: null, meetingModal: null, editingMeeting: null, undoStack: state.undoStack || [] };
   } catch(e) {
     console.error('Failed to load state:', e);
   }
@@ -935,6 +988,7 @@ async function saveToServer() {
     delete d.editingTask;
     delete d.meetingModal;
     delete d.editingMeeting;
+    delete d.undoStack;
     await fetch('/api/state', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1288,9 +1342,12 @@ window.confirmAssign = function() {
 };
 
 window.deleteTask = function(id) {
+  const task = state.tasks.find(t => t.id === id);
+  if (!task) return;
   state.tasks = state.tasks.filter(t => t.id !== id);
   save();
   render();
+  showUndoToast('משימה נמחקה', 'task', { ...task });
 };
 
 window.removeFromWeekly = function(id) {
@@ -1573,11 +1630,14 @@ window.saveMeeting = function() {
 };
 
 window.deleteMeeting = function(id) {
+  const meeting = state.meetings.find(m => m.id === id);
+  if (!meeting) return;
   state.meetings = state.meetings.filter(m => m.id !== id);
   state.meetingModal = null;
   state.editingMeeting = null;
   save();
   render();
+  showUndoToast('פגישה נמחקה', 'meeting', { ...meeting });
 };
 
 window.closeMeetingModal = function(e) {
@@ -1638,6 +1698,57 @@ function attachEvents() {
     document.addEventListener('mouseup', onUp);
   });
 }
+
+// ── Undo System ──
+let undoToastEl = null;
+let undoTimeout = null;
+let currentUndo = null;
+
+function showUndoToast(message, type, item) {
+  // Clear previous
+  if (undoTimeout) clearTimeout(undoTimeout);
+  if (undoToastEl) undoToastEl.remove();
+
+  currentUndo = { type, item };
+
+  undoToastEl = document.createElement('div');
+  undoToastEl.className = 'undo-toast';
+  undoToastEl.innerHTML = `
+    <span>${message}</span>
+    <button class="undo-btn" onclick="performUndo()">↩ בטל</button>
+    <div class="undo-timer"><div class="undo-timer-bar"></div></div>
+  `;
+  document.body.appendChild(undoToastEl);
+
+  // Trigger animation
+  requestAnimationFrame(() => undoToastEl.classList.add('show'));
+
+  undoTimeout = setTimeout(() => {
+    hideUndoToast();
+  }, 8000);
+}
+
+function hideUndoToast() {
+  if (undoToastEl) {
+    undoToastEl.classList.remove('show');
+    setTimeout(() => { if (undoToastEl) { undoToastEl.remove(); undoToastEl = null; } }, 300);
+  }
+  currentUndo = null;
+  if (undoTimeout) { clearTimeout(undoTimeout); undoTimeout = null; }
+}
+
+window.performUndo = function() {
+  if (!currentUndo) return;
+  const { type, item } = currentUndo;
+  if (type === 'task') {
+    state.tasks.push(item);
+  } else if (type === 'meeting') {
+    state.meetings.push(item);
+  }
+  save();
+  render();
+  hideUndoToast();
+};
 
 // ── GitHub Projects Sync ──
 async function syncGitHub() {
