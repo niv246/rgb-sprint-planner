@@ -843,6 +843,11 @@ body {
 .cal-meeting.type-weekly { background: var(--indigo-light); color: var(--indigo); border-right: 2px solid var(--indigo); }
 .cal-meeting.type-external { background: var(--green-light); color: #166534; border-right: 2px solid var(--green); }
 .cal-meeting.type-custom { background: var(--amber-light); color: #92400E; border-right: 2px solid var(--amber); }
+.cal-meeting.multi-day { opacity: 0.85; font-size: 9px; }
+.date-range-row { display: flex; gap: 10px; }
+.date-range-row > div { flex: 1; }
+.date-range-row label { display: block; font-size: 12px; font-weight: 500; color: var(--text-secondary); margin-bottom: 4px; }
+.date-range-row input { width: 100%; }
 
 /* ── Meeting Modal extras ── */
 .meeting-type-chips {
@@ -1526,12 +1531,20 @@ function renderCalDays(year, month) {
   for (let d = 1; d <= totalDays; d++) {
     const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
     const isToday = (today.getDate() === d && today.getMonth() === month && today.getFullYear() === year);
-    const dayMeetings = state.meetings.filter(m => m.date === dateStr);
+    const dayMeetings = state.meetings.filter(m => {
+      const start = m.date;
+      const end = m.endDate || m.date;
+      return dateStr >= start && dateStr <= end;
+    });
     cells += `<div class="cal-day ${isToday ? 'today' : ''}" onclick="openMeetingModal('${dateStr}')">
       <div class="cal-day-num">${d}</div>
       ${dayMeetings.map(m => {
         const t = MEETING_TYPES.find(t => t.id === m.type) || MEETING_TYPES[2];
-        return `<div class="cal-meeting ${t.color}" onclick="event.stopPropagation();editMeeting(${m.id})" title="${m.title} · ${m.time || ''}">${m.time ? m.time + ' ' : ''}${m.title}</div>`;
+        const isMulti = m.endDate && m.endDate !== m.date;
+        const isStart = dateStr === m.date;
+        const isEnd = dateStr === (m.endDate || m.date);
+        const label = isStart ? (m.time ? m.time + ' ' : '') + m.title : (isEnd ? m.title + ' ←' : '⋯ ' + m.title);
+        return `<div class="cal-meeting ${t.color}${isMulti ? ' multi-day' : ''}" onclick="event.stopPropagation();editMeeting(${m.id})" title="${m.title}${isMulti ? ' (' + m.date + ' → ' + m.endDate + ')' : ''}">${label}</div>`;
       }).join('')}
     </div>`;
   }
@@ -1557,8 +1570,16 @@ function renderMeetingModal() {
           ${MEETING_TYPES.map(t => `<div class="meeting-type-chip ${t.color} ${(m.type || 'weekly') === t.id ? 'selected' : ''}" data-type="${t.id}" onclick="selectMeetingType('${t.id}')">${t.name}</div>`).join('')}
         </div>
         ${(m.type || 'weekly') === 'weekly' ? '<div class="auto-repeat-note">סנכרון שבועי יחזור אוטומטית כל 5 ימים</div>' : ''}
-        <label>תאריך</label>
-        <input id="mt-date" type="date" value="${m.date || ''}" />
+        <div class="date-range-row">
+          <div>
+            <label>מתאריך</label>
+            <input id="mt-date" type="date" value="${m.date || ''}" onchange="syncEndDate()" />
+          </div>
+          <div>
+            <label>עד תאריך</label>
+            <input id="mt-endDate" type="date" value="${m.endDate || m.date || ''}" min="${m.date || ''}" />
+          </div>
+        </div>
         <label>שעה</label>
         <input id="mt-time" type="time" value="${m.time || '09:00'}" />
         <label>הערות</label>
@@ -1586,8 +1607,19 @@ window.changeCalMonth = function(dir) {
   render();
 };
 
+window.syncEndDate = function() {
+  const startEl = document.getElementById('mt-date');
+  const endEl = document.getElementById('mt-endDate');
+  if (startEl && endEl) {
+    endEl.min = startEl.value;
+    if (!endEl.value || endEl.value < startEl.value) {
+      endEl.value = startEl.value;
+    }
+  }
+};
+
 window.openMeetingModal = function(dateStr) {
-  state.editingMeeting = { type: 'weekly', date: dateStr || '', time: '09:00' };
+  state.editingMeeting = { type: 'weekly', date: dateStr || '', endDate: dateStr || '', time: '09:00' };
   state.meetingModal = 'add';
   render();
 };
@@ -1614,24 +1646,28 @@ window.selectMeetingType = function(typeId) {
 window.saveMeeting = function() {
   const title = document.getElementById('mt-title').value.trim();
   const date = document.getElementById('mt-date').value;
+  const endDate = document.getElementById('mt-endDate').value || date;
   const time = document.getElementById('mt-time').value;
   const notes = document.getElementById('mt-notes').value.trim();
   const type = state.editingMeeting.type || 'weekly';
   if (!title || !date) return;
 
+  // Ensure endDate is not before date
+  const finalEndDate = endDate >= date ? endDate : date;
+
   if (state.meetingModal === 'edit') {
     const m = state.meetings.find(m => m.id === state.editingMeeting.id);
-    if (m) { Object.assign(m, { title, date, time, notes, type }); }
+    if (m) { Object.assign(m, { title, date, endDate: finalEndDate, time, notes, type }); }
   } else {
     // Add the meeting
-    state.meetings.push({ id: state.meetingNextId++, title, date, time, notes, type });
+    state.meetings.push({ id: state.meetingNextId++, title, date, endDate: finalEndDate, time, notes, type });
     // If weekly type, auto-generate next 7 occurrences (every 5 days)
     if (type === 'weekly') {
       let d = new Date(date);
       for (let i = 1; i <= 7; i++) {
         d.setDate(d.getDate() + 5);
         const autoDate = d.toISOString().split('T')[0];
-        state.meetings.push({ id: state.meetingNextId++, title, date: autoDate, time, notes, type: 'weekly' });
+        state.meetings.push({ id: state.meetingNextId++, title, date: autoDate, endDate: autoDate, time, notes, type: 'weekly' });
       }
     }
   }
