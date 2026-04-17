@@ -439,7 +439,104 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  cursor: pointer;
 }
+.monthly-task-name:hover { color: var(--indigo); }
+.weekly-task-name { cursor: pointer; }
+.weekly-task-name:hover { color: var(--indigo); }
+
+/* Avatar stack for multi-assignee */
+.avatar-stack {
+  display: flex;
+  flex-direction: row-reverse;
+  flex-shrink: 0;
+  gap: 0;
+}
+.avatar-stack .person-avatar {
+  width: 18px;
+  height: 18px;
+  font-size: 9px;
+  margin-left: -6px;
+  border: 1.5px solid var(--surface);
+  flex-shrink: 0;
+}
+.avatar-stack .person-avatar:last-child { margin-left: 0; }
+
+/* View modal — readonly details */
+.view-detail-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border-light);
+  font-size: 13px;
+}
+.view-detail-row:last-child { border-bottom: none; }
+.view-detail-label {
+  font-weight: 500;
+  color: var(--text-secondary);
+  width: 90px;
+  flex-shrink: 0;
+}
+.view-detail-value {
+  flex: 1;
+  color: var(--text);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.view-detail-value.muted { color: var(--text-muted); }
+.view-priority-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  background: var(--surface-hover);
+}
+.view-status-chip {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 500;
+}
+.view-status-chip.todo { background: #FEF3C7; color: #92400E; }
+.view-status-chip.progress { background: #DBEAFE; color: #1E40AF; }
+.view-status-chip.done { background: #D1FAE5; color: #065F46; }
+.view-status-chip.backlog { background: var(--surface-hover); color: var(--text-muted); }
+.view-title {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+  line-height: 1.4;
+}
+.view-assignees-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.view-assignee-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px 3px 4px;
+  border-radius: 20px;
+  font-size: 12px;
+  background: var(--surface-hover);
+}
+.view-assignee-chip .person-avatar {
+  width: 18px;
+  height: 18px;
+  font-size: 9px;
+}
+.modal-actions .danger {
+  color: var(--red);
+  border-color: var(--red);
+}
+.modal-actions .danger:hover { background: var(--red-light); }
 .pulled-tag {
   font-size: 10px;
   padding: 1px 6px;
@@ -958,7 +1055,7 @@ let state = {
   currentCycle: 1,
   collapsedCategories: {},
   nextId: 1,
-  modal: null, // null | 'add' | 'edit' | 'assign'
+  modal: null, // null | 'add' | 'edit' | 'assign' | 'view'
   editingTask: null,
   notePopup: null,
   addingCategory: false,
@@ -1026,6 +1123,12 @@ function getCatClass(catId) {
   const map = { backend:'cat-backend', frontend:'cat-frontend', business:'cat-business', legal:'cat-legal', design:'cat-design', marketing:'cat-marketing', security:'cat-security', devops:'cat-devops' };
   return map[catId] || 'cat-default';
 }
+// Returns the canonical list of assignee ids for a task.
+// Prefers t.assignees (array, new field) but falls back to t.assignee (legacy single string).
+function getTaskAssignees(t) {
+  if (Array.isArray(t.assignees) && t.assignees.length) return t.assignees;
+  return t.assignee ? [t.assignee] : [];
+}
 function getWeekLabel(week, cycle) {
   return `שבוע ${week} · מחזור ${cycle}`;
 }
@@ -1034,7 +1137,7 @@ function getTasksForPersonWeek(personId) {
     t.weeklyAssignment &&
     t.weeklyAssignment.week === state.currentWeek &&
     t.weeklyAssignment.cycle === state.currentCycle &&
-    t.assignee === personId
+    getTaskAssignees(t).includes(personId)
   );
 }
 
@@ -1137,7 +1240,7 @@ function renderWeeklyTask(task) {
     <div class="weekly-task" draggable="true" data-task-id="${task.id}"
          ondragstart="onDragStart(event, ${task.id}, 'weekly')">
       <div class="status-btn ${statusClass}" onclick="cycleStatus(${task.id})" title="שנה סטטוס">${checkmark}</div>
-      <div class="${nameClass}">${task.name}</div>
+      <div class="${nameClass}" onclick="event.stopPropagation();openViewModal(${task.id})" title="לחץ לצפייה בפרטים">${task.name}</div>
       ${cat ? `<span class="weekly-task-cat ${getCatClass(task.category)}">${cat.name}</span>` : ''}
       <span class="task-note-icon" onclick="openNote(event, ${task.id})" title="הערה">${task.note ? '📝' : '💬'}</span>
       <span class="remove-weekly" onclick="removeFromWeekly(${task.id})" title="החזר למונטלי">✕</span>
@@ -1198,14 +1301,15 @@ function renderMonthly() {
 
 function renderMonthlyTask(task) {
   const pulled = task.weeklyAssignment !== null;
-  const person = PEOPLE.find(p => p.id === task.assignee);
+  const assignees = getTaskAssignees(task);
+  const persons = assignees.map(id => PEOPLE.find(p => p.id === id)).filter(Boolean);
   return `
     <div class="monthly-task ${pulled ? 'pulled' : ''}" draggable="true" data-task-id="${task.id}"
          ondragstart="onDragStart(event, ${task.id}, 'monthly')">
       <div class="priority-dot ${task.priority}"></div>
-      <div class="monthly-task-name">${task.name}</div>
+      <div class="monthly-task-name" onclick="event.stopPropagation();openViewModal(${task.id})" title="לחץ לצפייה בפרטים">${task.name}</div>
       ${pulled ? `<span class="pulled-tag">ש׳${task.weeklyAssignment.week}</span>` : ''}
-      ${person ? `<div class="person-avatar" style="background:${person.color};width:18px;height:18px;font-size:9px;flex-shrink:0">${person.name.charAt(0)}</div>` : ''}
+      ${persons.length ? `<div class="avatar-stack">${persons.map(p => `<div class="person-avatar" style="background:${p.color}" title="${p.name}">${p.name.charAt(0)}</div>`).join('')}</div>` : ''}
       ${!pulled ? `<button class="push-btn" onclick="openAssignModal(${task.id})" title="העבר לוויקלי">←</button>` : ''}
       <span class="edit-btn" onclick="openEditModal(${task.id})" title="ערוך">✎</span>
       <span class="delete-btn" onclick="deleteTask(${task.id})" title="מחק">🗑</span>
@@ -1217,6 +1321,7 @@ function renderModal() {
   if (state.modal === 'add' || state.modal === 'edit') {
     const t = state.editingTask || {};
     const isEdit = state.modal === 'edit';
+    const selected = Array.isArray(t.assignees) ? t.assignees : [];
     return `
       <div class="modal-overlay" onclick="closeModal(event)">
         <div class="modal" onclick="event.stopPropagation()">
@@ -1233,15 +1338,15 @@ function renderModal() {
             <option value="p1" ${t.priority === 'p1' ? 'selected' : ''}>P1 — חשוב</option>
             <option value="p2" ${t.priority === 'p2' ? 'selected' : ''}>P2 — עתידי</option>
           </select>
-          <label>אחראי</label>
+          <label>אחראי (אפשר לבחור כמה)</label>
           <div class="assignee-chips">
-            ${PEOPLE.map(p => `<div class="assignee-chip ${t.assignee === p.id ? 'selected' : ''}" data-person="${p.id}" onclick="selectAssigneeChip('${p.id}')">${p.name}</div>`).join('')}
+            ${PEOPLE.map(p => `<div class="assignee-chip ${selected.includes(p.id) ? 'selected' : ''}" data-person="${p.id}" onclick="toggleAssigneeChip('${p.id}')">${p.name}</div>`).join('')}
           </div>
           <label>הערה</label>
           <textarea id="m-note" placeholder="פרטים נוספים...">${t.note || ''}</textarea>
           <div class="modal-actions">
             <button class="primary" onclick="saveTask()">${isEdit ? 'שמור' : 'הוסף'}</button>
-            <button onclick="state.modal=null;render()">ביטול</button>
+            <button onclick="state.modal=null;state.editingTask=null;render()">ביטול</button>
           </div>
         </div>
       </div>
@@ -1249,24 +1354,89 @@ function renderModal() {
   }
   if (state.modal === 'assign') {
     const t = state.editingTask;
+    const selected = Array.isArray(t.assignees) ? t.assignees : [];
     return `
       <div class="modal-overlay" onclick="closeModal(event)">
         <div class="modal" onclick="event.stopPropagation()">
           <h3>העבר לוויקלי — שבוע ${state.currentWeek}</h3>
           <p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px">${t.name}</p>
-          <label>שייך ל</label>
+          <label>שייך ל (אפשר לבחור כמה)</label>
           <div class="assignee-chips">
-            ${PEOPLE.map(p => `<div class="assignee-chip ${t.assignee === p.id ? 'selected' : ''}" data-person="${p.id}" onclick="selectAssigneeChip('${p.id}')">${p.name}</div>`).join('')}
+            ${PEOPLE.map(p => `<div class="assignee-chip ${selected.includes(p.id) ? 'selected' : ''}" data-person="${p.id}" onclick="toggleAssigneeChip('${p.id}')">${p.name}</div>`).join('')}
           </div>
           <div class="modal-actions">
             <button class="primary" onclick="confirmAssign()">העבר</button>
-            <button onclick="state.modal=null;render()">ביטול</button>
+            <button onclick="state.modal=null;state.editingTask=null;render()">ביטול</button>
           </div>
         </div>
       </div>
     `;
   }
+  if (state.modal === 'view') {
+    return renderViewModal();
+  }
   return '';
+}
+
+function renderViewModal() {
+  const t = state.editingTask;
+  if (!t) return '';
+  const cat = state.categories.find(c => c.id === t.category);
+  const assignees = getTaskAssignees(t);
+  const persons = assignees.map(id => PEOPLE.find(p => p.id === id)).filter(Boolean);
+  const priorityLabel = { p0: 'P0 — קריטי', p1: 'P1 — חשוב', p2: 'P2 — עתידי' }[t.priority] || t.priority;
+  const pulled = t.weeklyAssignment;
+  const statusMap = { todo: 'לא התחיל', progress: 'בתהליך', done: 'הושלם' };
+  const statusClass = pulled ? (pulled.status || 'todo') : 'backlog';
+  const statusLabel = pulled ? (statusMap[pulled.status] || 'לא התחיל') : 'ב-Backlog';
+  return `
+    <div class="modal-overlay" onclick="closeModal(event)">
+      <div class="modal" onclick="event.stopPropagation()" style="width:480px;max-width:92vw">
+        <div class="view-title">${t.name || ''}</div>
+        <div class="view-detail-row">
+          <div class="view-detail-label">קטגוריה</div>
+          <div class="view-detail-value">
+            ${cat ? `<span class="weekly-task-cat ${getCatClass(t.category)}">${cat.name}</span>` : '<span class="muted">—</span>'}
+          </div>
+        </div>
+        <div class="view-detail-row">
+          <div class="view-detail-label">עדיפות</div>
+          <div class="view-detail-value">
+            <span class="view-priority-chip"><span class="priority-dot ${t.priority}"></span>${priorityLabel}</span>
+          </div>
+        </div>
+        <div class="view-detail-row">
+          <div class="view-detail-label">אחראי${persons.length > 1 ? 'ים' : ''}</div>
+          <div class="view-detail-value">
+            ${persons.length ? `<div class="view-assignees-row">${persons.map(p => `<span class="view-assignee-chip"><span class="person-avatar" style="background:${p.color}">${p.name.charAt(0)}</span>${p.name}</span>`).join('')}</div>` : '<span class="muted">—</span>'}
+          </div>
+        </div>
+        <div class="view-detail-row">
+          <div class="view-detail-label">סטטוס</div>
+          <div class="view-detail-value">
+            <span class="view-status-chip ${statusClass}">${statusLabel}</span>
+            ${pulled ? `<span style="margin-right:8px;font-size:12px;color:var(--text-muted)">· ${getWeekLabel(pulled.week, pulled.cycle)}</span>` : ''}
+          </div>
+        </div>
+        <div class="view-detail-row">
+          <div class="view-detail-label">הערות</div>
+          <div class="view-detail-value ${t.note ? '' : 'muted'}">${t.note ? t.note.replace(/</g,'&lt;') : 'אין הערות'}</div>
+        </div>
+        ${t.githubId ? `
+        <div class="view-detail-row">
+          <div class="view-detail-label">GitHub</div>
+          <div class="view-detail-value"><span style="font-size:12px;color:var(--text-muted)">סטטוס: ${t.githubStatus || '—'}</span></div>
+        </div>
+        ` : ''}
+        <div class="modal-actions">
+          <button class="primary" onclick="bridgeToEdit()">ערוך</button>
+          ${!pulled ? `<button onclick="bridgeToAssign()">משוך אליי</button>` : ''}
+          <button class="danger" onclick="deleteFromView()">מחק</button>
+          <button onclick="closeViewModal()">סגור</button>
+        </div>
+      </div>
+    </div>
+  `;
 }
 
 function renderNotePopup() {
@@ -1298,29 +1468,87 @@ window.toggleCategory = function(catId) {
 };
 
 window.openAddModal = function() {
-  state.editingTask = { assignee: 'niv' };
+  state.editingTask = { assignees: ['niv'] };
   state.modal = 'add';
   render();
 };
 
 window.openEditModal = function(id) {
-  state.editingTask = { ...state.tasks.find(t => t.id === id) };
+  const src = state.tasks.find(t => t.id === id);
+  if (!src) return;
+  state.editingTask = { ...src, assignees: getTaskAssignees(src).slice() };
   state.modal = 'edit';
   render();
 };
 
 window.openAssignModal = function(id) {
-  state.editingTask = { ...state.tasks.find(t => t.id === id) };
+  const src = state.tasks.find(t => t.id === id);
+  if (!src) return;
+  state.editingTask = { ...src, assignees: getTaskAssignees(src).slice() };
   state.modal = 'assign';
   render();
 };
 
-window.selectAssigneeChip = function(personId) {
-  state.editingTask.assignee = personId;
+// View modal (read-only details)
+window.openViewModal = function(id) {
+  const src = state.tasks.find(t => t.id === id);
+  if (!src) return;
+  state.editingTask = { ...src };
+  state.modal = 'view';
+  render();
+};
+
+window.closeViewModal = function() {
+  state.modal = null;
+  state.editingTask = null;
+  render();
+};
+
+window.bridgeToEdit = function() {
+  if (!state.editingTask) return;
+  state.editingTask = { ...state.editingTask, assignees: getTaskAssignees(state.editingTask).slice() };
+  state.modal = 'edit';
+  render();
+};
+
+window.bridgeToAssign = function() {
+  if (!state.editingTask) return;
+  state.editingTask = { ...state.editingTask, assignees: getTaskAssignees(state.editingTask).slice() };
+  state.modal = 'assign';
+  render();
+};
+
+window.deleteFromView = function() {
+  if (!state.editingTask) return;
+  const id = state.editingTask.id;
+  state.modal = null;
+  state.editingTask = null;
+  deleteTask(id);
+};
+
+// Multi-select assignee toggle
+window.toggleAssigneeChip = function(personId) {
+  if (!Array.isArray(state.editingTask.assignees)) {
+    state.editingTask.assignees = state.editingTask.assignee ? [state.editingTask.assignee] : [];
+  }
+  const arr = state.editingTask.assignees;
+  const idx = arr.indexOf(personId);
+  if (idx >= 0) {
+    // Don't allow removing the last assignee — at least one must remain
+    if (arr.length > 1) arr.splice(idx, 1);
+  } else {
+    arr.push(personId);
+  }
+  // Keep legacy `assignee` in sync with first element for live UI
+  state.editingTask.assignee = arr[0] || null;
+  // Toggle chip visually without full re-render (preserves input values)
   document.querySelectorAll('.assignee-chip').forEach(el => {
-    el.classList.toggle('selected', el.dataset.person === personId);
+    el.classList.toggle('selected', arr.includes(el.dataset.person));
   });
 };
+
+// Legacy alias — kept for safety in case any old inline handler remains
+window.selectAssigneeChip = window.toggleAssigneeChip;
 
 window.saveTask = function() {
   const name = document.getElementById('m-name').value.trim();
@@ -1328,15 +1556,24 @@ window.saveTask = function() {
   const cat = document.getElementById('m-cat').value;
   const priority = document.getElementById('m-priority').value;
   const note = document.getElementById('m-note').value.trim();
-  const assignee = state.editingTask.assignee;
+  let assignees = Array.isArray(state.editingTask.assignees) ? state.editingTask.assignees.slice() : [];
+  if (!assignees.length && state.editingTask.assignee) assignees = [state.editingTask.assignee];
+  if (!assignees.length) { alert('יש לבחור לפחות אדם אחד'); return; }
+  const primary = assignees[0];
 
   if (state.modal === 'edit') {
     const t = state.tasks.find(t => t.id === state.editingTask.id);
-    if (t) { t.name = name; t.category = cat; t.priority = priority; t.note = note; t.assignee = assignee; }
+    if (t) {
+      t.name = name; t.category = cat; t.priority = priority; t.note = note;
+      t.assignee = primary;      // legacy field — kept in sync
+      t.assignees = assignees;   // new canonical field
+    }
   } else {
     state.tasks.push({
       id: state.nextId++,
-      name, category: cat, priority, assignee, note,
+      name, category: cat, priority, note,
+      assignee: primary,
+      assignees,
       weeklyAssignment: null,
     });
   }
@@ -1348,9 +1585,13 @@ window.saveTask = function() {
 
 window.confirmAssign = function() {
   const t = state.tasks.find(t => t.id === state.editingTask.id);
+  let assignees = Array.isArray(state.editingTask.assignees) ? state.editingTask.assignees.slice() : [];
+  if (!assignees.length && state.editingTask.assignee) assignees = [state.editingTask.assignee];
+  if (!assignees.length) { alert('יש לבחור לפחות אדם אחד'); return; }
   if (t) {
-    t.assignee = state.editingTask.assignee;
-    t.weeklyAssignment = { week: state.currentWeek, cycle: state.currentCycle, status: 'todo' };
+    t.assignee = assignees[0];   // legacy
+    t.assignees = assignees;     // canonical
+    t.weeklyAssignment = { week: state.currentWeek, cycle: state.currentCycle, status: t.weeklyAssignment ? t.weeklyAssignment.status : 'todo' };
   }
   state.modal = null;
   state.editingTask = null;
@@ -1442,7 +1683,17 @@ window.onWeeklyDrop = function(e, personId) {
   if (!dragData) return;
   const t = state.tasks.find(t => t.id === dragData.taskId);
   if (t) {
-    t.assignee = personId;
+    const current = getTaskAssignees(t);
+    let assignees;
+    if (dragData.source === 'monthly' && !t.weeklyAssignment) {
+      // First time pulling from backlog — single assignee (the drop target)
+      assignees = [personId];
+    } else {
+      // Moving within weekly or adding a co-assignee — additive
+      assignees = current.includes(personId) ? current.slice() : [...current, personId];
+    }
+    t.assignees = assignees;
+    t.assignee = assignees[0]; // keep legacy in sync
     t.weeklyAssignment = { week: state.currentWeek, cycle: state.currentCycle, status: t.weeklyAssignment ? t.weeklyAssignment.status : 'todo' };
   }
   dragData = null;
