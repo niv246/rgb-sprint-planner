@@ -463,6 +463,40 @@ body {
 .avatar-stack .person-avatar:last-child { margin-left: 0; }
 
 /* View modal — readonly details */
+.view-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 14px;
+  margin-bottom: 4px;
+}
+.view-detail-cell {
+  background: var(--surface-hover);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 62px;
+}
+.view-detail-cell.full { grid-column: 1 / -1; }
+.view-detail-cell .view-detail-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  letter-spacing: 0.2px;
+}
+.view-detail-cell .view-detail-value {
+  color: var(--text);
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.5;
+}
+.view-detail-cell.notes {
+  min-height: 90px;
+  background: var(--surface);
+  border: 1px solid var(--border-light);
+}
 .view-detail-row {
   display: flex;
   align-items: center;
@@ -1391,43 +1425,45 @@ function renderViewModal() {
   const statusLabel = pulled ? (statusMap[pulled.status] || 'לא התחיל') : 'ב-Backlog';
   return `
     <div class="modal-overlay" onclick="closeModal(event)">
-      <div class="modal" onclick="event.stopPropagation()" style="width:480px;max-width:92vw">
+      <div class="modal" onclick="event.stopPropagation()" style="width:520px;max-width:92vw">
         <div class="view-title">${t.name || ''}</div>
-        <div class="view-detail-row">
-          <div class="view-detail-label">קטגוריה</div>
-          <div class="view-detail-value">
-            ${cat ? `<span class="weekly-task-cat ${getCatClass(t.category)}">${cat.name}</span>` : '<span class="muted">—</span>'}
+        <div class="view-grid">
+          <div class="view-detail-cell">
+            <div class="view-detail-label">קטגוריה</div>
+            <div class="view-detail-value">
+              ${cat ? `<span class="weekly-task-cat ${getCatClass(t.category)}">${cat.name}</span>` : '<span class="muted">—</span>'}
+            </div>
           </div>
-        </div>
-        <div class="view-detail-row">
-          <div class="view-detail-label">עדיפות</div>
-          <div class="view-detail-value">
-            <span class="view-priority-chip"><span class="priority-dot ${t.priority}"></span>${priorityLabel}</span>
+          <div class="view-detail-cell">
+            <div class="view-detail-label">עדיפות</div>
+            <div class="view-detail-value">
+              <span class="view-priority-chip"><span class="priority-dot ${t.priority}"></span>${priorityLabel}</span>
+            </div>
           </div>
-        </div>
-        <div class="view-detail-row">
-          <div class="view-detail-label">אחראי${persons.length > 1 ? 'ים' : ''}</div>
-          <div class="view-detail-value">
-            ${persons.length ? `<div class="view-assignees-row">${persons.map(p => `<span class="view-assignee-chip"><span class="person-avatar" style="background:${p.color}">${p.name.charAt(0)}</span>${p.name}</span>`).join('')}</div>` : '<span class="muted">—</span>'}
+          <div class="view-detail-cell">
+            <div class="view-detail-label">אחראי${persons.length > 1 ? 'ים' : ''}</div>
+            <div class="view-detail-value">
+              ${persons.length ? `<div class="view-assignees-row">${persons.map(p => `<span class="view-assignee-chip"><span class="person-avatar" style="background:${p.color}">${p.name.charAt(0)}</span>${p.name}</span>`).join('')}</div>` : '<span class="muted">—</span>'}
+            </div>
           </div>
-        </div>
-        <div class="view-detail-row">
-          <div class="view-detail-label">סטטוס</div>
-          <div class="view-detail-value">
-            <span class="view-status-chip ${statusClass}">${statusLabel}</span>
-            ${pulled ? `<span style="margin-right:8px;font-size:12px;color:var(--text-muted)">· ${getWeekLabel(pulled.week, pulled.cycle)}</span>` : ''}
+          <div class="view-detail-cell">
+            <div class="view-detail-label">סטטוס</div>
+            <div class="view-detail-value">
+              <span class="view-status-chip ${statusClass}">${statusLabel}</span>
+              ${pulled ? `<div style="margin-top:4px;font-size:11px;color:var(--text-muted)">${getWeekLabel(pulled.week, pulled.cycle)}</div>` : ''}
+            </div>
           </div>
+          <div class="view-detail-cell notes full">
+            <div class="view-detail-label">הערות</div>
+            <div class="view-detail-value ${t.note ? '' : 'muted'}">${t.note ? t.note.replace(/</g,'&lt;') : 'אין הערות'}</div>
+          </div>
+          ${t.githubId ? `
+          <div class="view-detail-cell full">
+            <div class="view-detail-label">GitHub</div>
+            <div class="view-detail-value" style="font-size:12px;color:var(--text-muted)">סטטוס: ${t.githubStatus || '—'}</div>
+          </div>
+          ` : ''}
         </div>
-        <div class="view-detail-row">
-          <div class="view-detail-label">הערות</div>
-          <div class="view-detail-value ${t.note ? '' : 'muted'}">${t.note ? t.note.replace(/</g,'&lt;') : 'אין הערות'}</div>
-        </div>
-        ${t.githubId ? `
-        <div class="view-detail-row">
-          <div class="view-detail-label">GitHub</div>
-          <div class="view-detail-value"><span style="font-size:12px;color:var(--text-muted)">סטטוס: ${t.githubStatus || '—'}</span></div>
-        </div>
-        ` : ''}
         <div class="modal-actions">
           <button class="primary" onclick="bridgeToEdit()">ערוך</button>
           ${!pulled ? `<button onclick="bridgeToAssign()">משוך אליי</button>` : ''}
