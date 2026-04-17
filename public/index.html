@@ -466,36 +466,45 @@ body {
 .view-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 10px 14px;
-  margin-bottom: 4px;
+  gap: 8px 10px;
+  margin-bottom: 8px;
 }
 .view-detail-cell {
   background: var(--surface-hover);
-  border-radius: 8px;
-  padding: 10px 12px;
-  font-size: 13px;
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
   display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-height: 62px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 0;
 }
 .view-detail-cell.full { grid-column: 1 / -1; }
 .view-detail-cell .view-detail-label {
   font-size: 11px;
   font-weight: 500;
   color: var(--text-muted);
-  letter-spacing: 0.2px;
+  flex-shrink: 0;
 }
 .view-detail-cell .view-detail-value {
   color: var(--text);
   white-space: pre-wrap;
   word-break: break-word;
-  line-height: 1.5;
+  line-height: 1.4;
+  text-align: left;
 }
 .view-detail-cell.notes {
-  min-height: 90px;
+  flex-direction: column;
+  align-items: stretch;
+  min-height: 80px;
+  padding: 8px 10px;
   background: var(--surface);
   border: 1px solid var(--border-light);
+}
+.view-detail-cell.notes .view-detail-value {
+  text-align: right;
+  margin-top: 4px;
 }
 .view-detail-row {
   display: flex;
