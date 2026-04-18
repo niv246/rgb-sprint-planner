@@ -53,7 +53,9 @@ body {
   background: var(--surface);
   border-bottom: 1px solid var(--border);
   height: 56px;
+  flex-shrink: 0;
 }
+.logo { font-size: clamp(16px, 2vw, 20px); }
 .header-right {
   display: flex;
   align-items: center;
@@ -83,6 +85,7 @@ body {
 .layout {
   display: flex;
   height: calc(100vh - 56px);
+  overflow: hidden;
 }
 
 /* ── Weekly Panel (LEFT) ── */
@@ -91,6 +94,7 @@ body {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  min-height: 0;
 }
 .weekly-header {
   display: flex;
@@ -133,6 +137,7 @@ body {
 .weekly-body {
   flex: 1;
   overflow-y: auto;
+  min-height: 0;
   padding: 16px 20px;
   display: flex;
   flex-direction: column;
@@ -176,6 +181,8 @@ body {
 }
 .person-tasks {
   min-height: 48px;
+  max-height: 40vh;
+  overflow-y: auto;
   padding: 4px;
 }
 .person-tasks.drag-over {
@@ -220,6 +227,9 @@ body {
   flex: 1;
   font-size: 13px;
   min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .weekly-task-name.done-text {
   text-decoration: line-through;
@@ -268,6 +278,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  flex-shrink: 0;
 }
 .progress-row {
   display: flex;
@@ -278,7 +289,7 @@ body {
   display: flex;
   align-items: center;
   gap: 6px;
-  min-width: 70px;
+  min-width: 60px;
 }
 .progress-name {
   font-size: 12px;
@@ -299,7 +310,7 @@ body {
 .progress-pct {
   font-size: 12px;
   font-weight: 600;
-  min-width: 36px;
+  min-width: 32px;
   text-align: left;
   color: var(--text-secondary);
 }
@@ -335,12 +346,13 @@ body {
 
 /* ── Monthly Panel (RIGHT) ── */
 .monthly-panel {
-  min-width: 380px;
+  min-width: 280px;
   display: flex;
   flex-direction: column;
   background: var(--surface);
   border-left: 1px solid var(--border);
   flex-shrink: 0;
+  min-height: 0;
 }
 .monthly-header {
   display: flex;
@@ -1066,6 +1078,40 @@ body {
   color: white;
   border-color: var(--indigo);
 }
+
+/* ── Responsive: laptop screens (≤ 1400px) ── */
+@media (max-width: 1400px) {
+  .monthly-panel { min-width: 280px; }
+  .header { padding: 8px 16px; }
+  .weekly-header, .calendar-header { padding: 12px 16px; }
+  .weekly-body { padding: 12px 16px; }
+  .weekly-footer { padding: 10px 16px; }
+  .monthly-header { padding: 12px 16px; }
+  .monthly-body { padding: 8px; }
+  .person-header { padding: 8px 12px; }
+  .weekly-task { padding: 8px 10px; gap: 8px; }
+  .weekly-task-cat { display: none; }
+  .next-meeting-section { margin: 8px; padding: 10px; }
+}
+
+/* ── Responsive: small screens (≤ 1100px) — stack panels ── */
+@media (max-width: 1100px) {
+  .layout { flex-direction: column-reverse; }
+  .monthly-panel {
+    width: 100% !important;
+    min-width: unset;
+    max-height: 35vh;
+    border-left: none;
+    border-bottom: 1px solid var(--border);
+  }
+  .weekly-panel, .calendar-panel {
+    flex: 1;
+    min-height: 0;
+  }
+  .resize-handle { display: none; }
+  .progress-row { gap: 6px; }
+  .progress-name { font-size: 11px; }
+}
 </style>
 </head>
 <body>
@@ -1297,8 +1343,10 @@ function renderMonthly() {
   state.tasks.forEach(t => {
     if (grouped[t.category]) grouped[t.category].push(t);
   });
+  // Clamp width to 40% of viewport so panel never overflows on small screens
+  const effectiveWidth = Math.min(state.monthlyWidth || 380, Math.round(window.innerWidth * 0.4));
   return `
-    <div class="monthly-panel" style="width:${state.monthlyWidth}px">
+    <div class="monthly-panel" style="width:${effectiveWidth}px">
       <div class="monthly-header">
         <div class="monthly-title">Backlog מונטלי</div>
         <button class="add-task-btn" style="background:#24292F;margin-left:6px;" onclick="syncGitHub()" id="sync-btn">⟳ GitHub</button>
@@ -2128,6 +2176,15 @@ async function init() {
   render();
 }
 init();
+
+// ── Re-render on window resize (debounced) for responsive layout ──
+let resizeTimeout;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimeout);
+  resizeTimeout = setTimeout(() => {
+    if (!state.modal && !state.meetingModal && !state.notePopup) render();
+  }, 150);
+});
 
 // ── Auto-refresh (poll every 30s for teammate changes) ──
 setInterval(async () => {
