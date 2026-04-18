@@ -257,6 +257,7 @@ function getSeedData() {
     currentWeek: 1,
     currentCycle: 1,
     collapsedCategories: {},
+    collapsedPeople: {},
     nextId,
     monthlyWidth: 380,
     currentView: 'sprint',

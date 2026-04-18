@@ -147,7 +147,6 @@ body {
   background: var(--surface);
   border-radius: var(--radius);
   border: 1px solid var(--border);
-  overflow: hidden;
 }
 .person-header {
   display: flex;
@@ -156,6 +155,35 @@ body {
   padding: 10px 16px;
   background: var(--surface-hover);
   border-bottom: 1px solid var(--border-light);
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s;
+}
+.person-header:hover { background: var(--indigo-light); }
+.person-section.collapsed .person-header { border-bottom: none; }
+.person-header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.person-chevron {
+  font-size: 10px;
+  color: var(--text-muted);
+  transition: transform 0.15s;
+  display: inline-block;
+}
+.person-chevron.collapsed { transform: rotate(-90deg); }
+.person-drop-rail {
+  height: 6px;
+  margin: 4px 8px;
+  border-radius: 4px;
+  border: 2px dashed var(--border-light);
+  transition: all 0.15s;
+}
+.person-drop-rail.drag-over {
+  border-color: var(--indigo);
+  background: var(--indigo-light);
+  height: 24px;
 }
 .person-name {
   font-size: 14px;
@@ -181,9 +209,9 @@ body {
 }
 .person-tasks {
   min-height: 48px;
-  max-height: 40vh;
-  overflow-y: auto;
   padding: 4px;
+  border-bottom-left-radius: var(--radius);
+  border-bottom-right-radius: var(--radius);
 }
 .person-tasks.drag-over {
   background: var(--indigo-light);
@@ -1143,6 +1171,7 @@ let state = {
   currentWeek: 1,
   currentCycle: 1,
   collapsedCategories: {},
+  collapsedPeople: {},
   nextId: 1,
   modal: null, // null | 'add' | 'edit' | 'assign' | 'view'
   editingTask: null,
@@ -1301,20 +1330,29 @@ function renderWeekly() {
 function renderPersonSection(person) {
   const tasks = getTasksForPersonWeek(person.id);
   const done = tasks.filter(t => t.weeklyAssignment.status === 'done').length;
+  const collapsed = !!(state.collapsedPeople && state.collapsedPeople[person.id]);
   return `
-    <div class="person-section">
-      <div class="person-header">
+    <div class="person-section ${collapsed ? 'collapsed' : ''}">
+      <div class="person-header" onclick="togglePerson('${person.id}')">
         <div class="person-name">
           <div class="person-avatar" style="background:${person.color}">${person.name.charAt(0)}</div>
           ${person.name}
         </div>
-        <div class="person-stats">${done}/${tasks.length} הושלמו</div>
+        <div class="person-header-right">
+          <div class="person-stats">${done}/${tasks.length} הושלמו</div>
+          <span class="person-chevron ${collapsed ? 'collapsed' : ''}">▼</span>
+        </div>
       </div>
-      <div class="person-tasks" data-person="${person.id}"
-           ondragover="onWeeklyDragOver(event)" ondragleave="onWeeklyDragLeave(event)" ondrop="onWeeklyDrop(event, '${person.id}')">
-        ${tasks.length === 0 ? `<div class="empty-person">גרור משימות מהמונטלי או לחץ ←</div>` :
-          tasks.map(t => renderWeeklyTask(t)).join('')}
-      </div>
+      ${collapsed ? `
+        <div class="person-drop-rail" data-person="${person.id}"
+             ondragover="onWeeklyDragOver(event)" ondragleave="onWeeklyDragLeave(event)" ondrop="onWeeklyDrop(event, '${person.id}')"></div>
+      ` : `
+        <div class="person-tasks" data-person="${person.id}"
+             ondragover="onWeeklyDragOver(event)" ondragleave="onWeeklyDragLeave(event)" ondrop="onWeeklyDrop(event, '${person.id}')">
+          ${tasks.length === 0 ? `<div class="empty-person">גרור משימות מהמונטלי או לחץ ←</div>` :
+            tasks.map(t => renderWeeklyTask(t)).join('')}
+        </div>
+      `}
     </div>
   `;
 }
@@ -1556,6 +1594,13 @@ window.changeWeek = function(dir) {
 
 window.toggleCategory = function(catId) {
   state.collapsedCategories[catId] = !state.collapsedCategories[catId];
+  save();
+  render();
+};
+
+window.togglePerson = function(personId) {
+  if (!state.collapsedPeople) state.collapsedPeople = {};
+  state.collapsedPeople[personId] = !state.collapsedPeople[personId];
   save();
   render();
 };
